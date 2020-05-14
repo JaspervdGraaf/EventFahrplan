@@ -8,6 +8,7 @@ apply plugin: "com.android.application"
 apply plugin: "kotlin-android"
 apply plugin: "kotlin-kapt"
 apply plugin: "de.mobilej.unmock"
+apply plugin: "com.hiya.jacoco-android"
 apply from: "../gradle/sonarqube.gradle"
 
 android {
@@ -158,6 +159,12 @@ android {
     kotlinOptions {
         jvmTarget = Config.compatibleJavaVersion
     }
+}
+
+jacocoAndroidUnitTestReport {
+    csv.enabled false
+    html.enabled false
+    xml.enabled true
 }
 
 unMock {
