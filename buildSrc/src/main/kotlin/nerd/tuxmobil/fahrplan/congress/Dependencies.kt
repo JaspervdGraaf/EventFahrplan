@@ -19,7 +19,7 @@ object Plugins {
 
     private object Versions {
         const val android = "7.0.2"
-        const val androidJunitJacoco = "0.16.0"
+        const val androidJunitJacoco = "0.17.0-SNAPSHOT"
         const val kotlin = "1.5.31"
         const val sonarQube = "3.3"
         const val unMock = "0.7.8"
