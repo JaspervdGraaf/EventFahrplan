@@ -81,6 +81,7 @@
 		Kotlin, Google Support Library, BetterLinkMovementMethod, Email Intent Builder,
 		Engelsystem, Espresso, Markwon, OkHttp, SnackEngage, TraceDroid
 	</string>
+    <string name="about_f_droid_listing">F-Droid vermelding</string>
     <string name="about_google_play_listing">Google Play vermelding</string>
     <string name="about_source_code">Bron-code</string>
     <string name="today">vandaag</string>
