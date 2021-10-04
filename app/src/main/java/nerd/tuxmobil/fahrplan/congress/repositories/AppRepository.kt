@@ -2,6 +2,7 @@ package nerd.tuxmobil.fahrplan.congress.repositories
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.WorkerThread
 import info.metadude.android.eventfahrplan.commons.extensions.onFailure
 import info.metadude.android.eventfahrplan.commons.logging.Logging
 import info.metadude.android.eventfahrplan.commons.temporal.Moment
@@ -19,7 +20,13 @@ import info.metadude.android.eventfahrplan.engelsystem.models.ShiftsResult
 import info.metadude.android.eventfahrplan.network.models.Meta
 import info.metadude.android.eventfahrplan.network.repositories.ScheduleNetworkRepository
 import info.metadude.kotlin.library.engelsystem.models.Shift
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapLatest
 import nerd.tuxmobil.fahrplan.congress.BuildConfig
 import nerd.tuxmobil.fahrplan.congress.dataconverters.cropToDayRangesExtent
 import nerd.tuxmobil.fahrplan.congress.dataconverters.sanitize
@@ -70,6 +77,7 @@ object AppRepository {
     private lateinit var logging: Logging
 
     private val parentJobs = mutableMapOf<String, Job>()
+    private lateinit var databaseScope: DatabaseScope
     private lateinit var networkScope: NetworkScope
 
     private lateinit var alarmsDatabaseRepository: AlarmsDatabaseRepository
@@ -85,10 +93,34 @@ object AppRepository {
     private var alarmsHaveChanged = false
     private var highlightsHaveChanged = false
 
+    private val refreshStarredSessionsSignal = MutableSharedFlow<Unit>()
+    private val loadStarredSessionsSignal = flow {
+        emit(Unit)
+        emitAll(refreshStarredSessionsSignal)
+    }
+
+    private fun refreshStarredSessions() {
+        logging.d(javaClass.simpleName, "Refreshing starred sessions ...")
+        val requestIdentifier = "refreshStarredSessions"
+        parentJobs[requestIdentifier] = databaseScope.launchNamed(requestIdentifier) {
+            refreshStarredSessionsSignal.emit(Unit)
+        }
+    }
+
+    /**
+     * Emits all sessions from the database which have been favored aka. starred but no canceled.
+     * The returned list might be empty.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val starredSessions: Flow<List<Session>> = loadStarredSessionsSignal.mapLatest {
+        loadStarredSessions()
+    }
+
     @JvmOverloads
     fun initialize(
             context: Context,
             logging: Logging,
+            databaseScope: DatabaseScope = DatabaseScope.of(AppExecutionContext, AppExceptionHandler(logging)),
             networkScope: NetworkScope = NetworkScope.of(AppExecutionContext, AppExceptionHandler(logging)),
             alarmsDatabaseRepository: AlarmsDatabaseRepository = AlarmsDatabaseRepository(AlarmsDBOpenHelper(context)),
             highlightsDatabaseRepository: HighlightsDatabaseRepository = HighlightsDatabaseRepository(HighlightDBOpenHelper(context)),
@@ -100,6 +132,7 @@ object AppRepository {
     ) {
         this.context = context
         this.logging = logging
+        this.databaseScope = databaseScope
         this.networkScope = networkScope
         this.alarmsDatabaseRepository = alarmsDatabaseRepository
         this.highlightsDatabaseRepository = highlightsDatabaseRepository
@@ -263,7 +296,8 @@ object AppRepository {
      * Loads all sessions from the database which have been favored aka. starred but no canceled.
      * The returned list might be empty.
      */
-    fun loadStarredSessions() = loadSessionsForAllDays(true)
+    @WorkerThread
+    private fun loadStarredSessions() = loadSessionsForAllDays(true)
             .filter { it.highlight && !it.changedIsCanceled }
             .also { logging.d(javaClass.simpleName, "${it.size} sessions starred.") }
 
@@ -356,14 +390,18 @@ object AppRepository {
     private fun readHighlights() =
             highlightsDatabaseRepository.query().toHighlightsAppModel()
 
+    @WorkerThread
     fun updateHighlight(session: Session) {
         val highlightDatabaseModel = session.toHighlightDatabaseModel()
         val values = highlightDatabaseModel.toContentValues()
         highlightsDatabaseRepository.update(values, session.sessionId)
+        refreshStarredSessions()
     }
 
+    @WorkerThread
     fun deleteAllHighlights() {
         highlightsDatabaseRepository.deleteAll()
+        refreshStarredSessions()
     }
 
     fun readSessionBySessionId(sessionId: String): Session {
@@ -428,6 +466,7 @@ object AppRepository {
         }
     }
 
+    @WorkerThread
     fun readMeta() =
             metaDatabaseRepository.query().toMetaAppModel()
 
@@ -456,6 +495,7 @@ object AppRepository {
         return AlarmToneConversion.getNotificationIntentUri(alarmTone, AlarmTonePreference.DEFAULT_VALUE_URI)
     }
 
+    @WorkerThread
     fun readUseDeviceTimeZoneEnabled() =
         sharedPreferencesRepository.isUseDeviceTimeZoneEnabled()
 

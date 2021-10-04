@@ -157,6 +157,9 @@ android {
 
     kotlinOptions {
         jvmTarget = Config.compatibleJavaVersion
+        freeCompilerArgs = [
+                "-Xopt-in=kotlin.RequiresOptIn"
+        ]
     }
 }
 
@@ -202,10 +205,13 @@ dependencies {
     testImplementation(Libs.assertjAndroid) {
         exclude group: "com.android.support", module: "support-annotations"
     }
+    testImplementation Libs.coreTesting
     testImplementation Libs.junit
+    testImplementation Libs.kotlinCoroutinesTest
     testImplementation Libs.mockitoCore
     testImplementation Libs.threeTenBp
     testImplementation Libs.truth
+    testImplementation Libs.turbine
 
     unmock Libs.robolectric
 }
